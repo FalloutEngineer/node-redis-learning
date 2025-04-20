@@ -2,16 +2,10 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ToysService } from './toys.service';
 import { AddAnimalToToyDto } from './dto/AddAnimalToToy.dto';
 import { CreateToyDto } from './dto/CreateToy.dto';
-import Redis from 'ioredis';
-import { CountAnimals } from './toys';
-import { InjectRedis } from '@nestjs-modules/ioredis';
 
 @Controller('toys')
 export class ToysController {
-  constructor(
-    private readonly toyService: ToysService,
-    @InjectRedis() private readonly redisClient: Redis,
-  ) {}
+  constructor(private readonly toyService: ToysService) {}
 
   @Get()
   getAllToys() {
@@ -44,20 +38,10 @@ export class ToysController {
 
   @Get('countAnimals/:id')
   async countAnimalsOfToy(@Param('id') toyId: string) {
-    const cacheKey = `countAnimalsOfToy:${toyId}`;
-    const cached = await this.redisClient.get(cacheKey);
-
-    if (cached) {
-      return JSON.parse(cached) as CountAnimals;
-    }
-
     const numberToyId = Number(toyId);
     if (Number.isNaN(numberToyId)) throw new Error('Invalid number Toy ID');
 
-    const count = this.toyService.countAnimalsOfToy(numberToyId);
-    await this.redisClient.set(cacheKey, JSON.stringify(count), 'EX', 60);
-
-    return count;
+    return this.toyService.countAnimalsOfToy(numberToyId);
   }
 
   @Post()

@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateToyDto } from './dto/CreateToy.dto';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+import { CountAnimals } from './toys';
 
 @Injectable()
 export class ToysService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    @InjectRedis() private readonly redisClient: Redis,
+  ) {}
 
   async getAllToys() {
     return await this.prismaService.toy.findMany();
@@ -70,11 +76,23 @@ export class ToysService {
   }
 
   async countAnimalsOfToy(toyId: number) {
+    const cacheKey = `countAnimalsOfToy:${toyId}`;
+    const cached = await this.redisClient.get(cacheKey);
+
+    if (cached) {
+      return JSON.parse(cached) as CountAnimals;
+    }
+
     const toy = await this.prismaService.toy.findUnique({
       where: { id: toyId },
       include: { animals: true },
     });
     if (!toy) throw new Error('Toy not found');
-    return { name: toy.name, count: toy.animals.length };
+
+    const count = { name: toy.name, count: toy.animals.length };
+
+    void this.redisClient.set(cacheKey, JSON.stringify(count), 'EX', 60);
+
+    return count;
   }
 }
